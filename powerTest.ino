@@ -1,4 +1,3 @@
-
 #include <Arduino.h>
 #include "ODriveCAN.h"
 
@@ -91,16 +90,9 @@ void setup() {
   odrv19.onFeedback(onFeedback, &odrv19_user_data);
   odrv19.onStatus(onHeartbeat, &odrv19_user_data);
 
-  // Configure and initialize the CAN bus interface. This function depends on
-  // your hardware and the CAN stack that you're using.
   if (!setupCan()) {
     while (true); // spin indefinitely
   }
-
-  //while (!odrv0_user_data.received_heartbeat) {
-  //  pumpEvents(can_intf);
-  //  delay(100);
-  //}
 
 
   // request bus voltage and current (1sec timeout)
@@ -116,29 +108,33 @@ void setup() {
     odrv16.clearErrors();
     delay(1);
     odrv16.setState(ODriveAxisState::AXIS_STATE_CLOSED_LOOP_CONTROL);
-    odrv16.setControllerMode(2,2);
+    odrv16.setControllerMode(2,1);
 
   //}
 
     odrv19.clearErrors();
     delay(1);
     odrv19.setState(ODriveAxisState::AXIS_STATE_CLOSED_LOOP_CONTROL);
-    odrv19.setControllerMode(2,2);
+    odrv19.setControllerMode(2,1);
 
-  Serial.println("vel estimate (rev/s), Milliseconds Since Start, Toruqe (NM)");
+  Serial.println("vel estimate (rev/s), Milliseconds Since Start, Toruqe (NM), nodeID,");
 
 }
 
 void loop() {
   pumpEvents(can_intf); // This is required on some platforms to handle incoming feedback CAN messages
+  float velTarget = 10*sin(2*PI/4000*millis());
+  odrv16.setVelocity( velTarget );//1 newton meters
 
-  odrv16.setVelocity(10);//1 newton meters
+  //odrv16.setVelocity(10);//1 newton meters
 
-  odrv19.setVelocity(0.00);//0 newton meters
+  
+
+  odrv19.setVelocity(-1*velTarget);//1 newton meters
 
 
-  // print position and velocity for Serial Plotter
-  if (odrv16_user_data.received_feedback) {
+  if (odrv16_user_data.received_feedback) 
+  {
     Get_Encoder_Estimates_msg_t feedback = odrv16_user_data.last_feedback;
     odrv16_user_data.received_feedback = false;
     odrv16.request(torqMsg, 1);
@@ -147,8 +143,20 @@ void loop() {
     Serial.print(millis());
     Serial.print(",");
     Serial.print(torqMsg.Torque_Estimate);
-    Serial.println(",");
+    Serial.println(",16,");
+  }
 
+  if (odrv19_user_data.received_feedback) 
+  {
+    Get_Encoder_Estimates_msg_t feedback = odrv19_user_data.last_feedback;
+    odrv19_user_data.received_feedback = false;
+    odrv19.request(torqMsg, 1);
+    Serial.print(feedback.Vel_Estimate);
+    Serial.print(",");
+    Serial.print(millis());
+    Serial.print(",");
+    Serial.print(torqMsg.Torque_Estimate);
+    Serial.println(",19,");
   }
   
 }
