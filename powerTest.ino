@@ -41,7 +41,7 @@ ODriveCAN* odrives[] = {&odrv16, &odrv19}; // Make sure all ODriveCAN instances 
 struct ODriveUserData {
   Heartbeat_msg_t last_heartbeat;
   bool received_heartbeat = false;
-  Get_Encoder_Estimates_msg_t last_feedback;
+  Get_Encoder_Estimates_msg_t lastEncoderFeedback;
   bool received_feedback = false;
 };
 
@@ -57,9 +57,9 @@ void onHeartbeat(Heartbeat_msg_t& msg, void* user_data) {
 }
 
 // Called every time a feedback message arrives from the ODrive
-void onFeedback(Get_Encoder_Estimates_msg_t& msg, void* user_data) {
+void onFeedback(Get_Encoder_Estimates_msg_t& encoderMsg, void* user_data) {
   ODriveUserData* odrv_user_data = static_cast<ODriveUserData*>(user_data);
-  odrv_user_data->last_feedback = msg;
+  odrv_user_data->lastEncoderFeedback = encoderMsg;
   odrv_user_data->received_feedback = true;
 }
 
@@ -71,7 +71,14 @@ void onCanMessage(const CanMsg& msg) {
 }
 
 bool getTorque(Get_Torques_msg_t& msg, uint16_t timeout_ms = 10);
+// bool getBusVI(Get_Bus_Voltage_Current_msg_t& msg, uint16_t timeout_ms = 10); //already creatd in can.h
+// bool getCurrents(Get_Iq_msg_t& msg, uint16_t timeout_ms = 10); //already created in can.h
+
 Get_Torques_msg_t torqMsg;
+Get_Bus_Voltage_Current_msg_t vbusMsg;
+Get_Iq_msg_t iqMsg;
+
+
 
 
 void setup() {
@@ -96,13 +103,9 @@ void setup() {
 
 
   // request bus voltage and current (1sec timeout)
-  Get_Bus_Voltage_Current_msg_t vbus;
-  if (!odrv16.request(vbus, 1)) {
+  if (!odrv16.request(vbusMsg, 1)) {
     //while (true); // spin indefinitely
-  }
-
-  odrv19.request(torqMsg, 1);
-  
+  }  
 
   //while (odrv0_user_data.last_heartbeat.Axis_State != ODriveAxisState::AXIS_STATE_CLOSED_LOOP_CONTROL) {
     odrv16.clearErrors();
@@ -117,45 +120,64 @@ void setup() {
     odrv19.setState(ODriveAxisState::AXIS_STATE_CLOSED_LOOP_CONTROL);
     odrv19.setControllerMode(2,1);
 
-  Serial.println("vel estimate (rev/s), Milliseconds Since Start, Toruqe (NM), nodeID,");
+  Serial.println("vel estimate (rev/s), Milliseconds Since Start, Toruqe  Target (NM), Torque estimate [nm], VBUS DC Voltage [V], vbuS DC Current [A], Set Current [A], Measured Current [A], nodeID,");
 
 }
 
 void loop() {
   pumpEvents(can_intf); // This is required on some platforms to handle incoming feedback CAN messages
   float velTarget = 10*sin(2*PI/4000*millis());
-  odrv16.setVelocity( velTarget );//1 newton meters
 
-  //odrv16.setVelocity(10);//1 newton meters
-
-  
-
-  odrv19.setVelocity(-1*velTarget);//1 newton meters
-
+  odrv16.setVelocity(velTarget);
+  odrv19.setVelocity(-velTarget);
 
   if (odrv16_user_data.received_feedback) 
   {
-    Get_Encoder_Estimates_msg_t feedback = odrv16_user_data.last_feedback;
+    Get_Encoder_Estimates_msg_t encoderFeedback = odrv16_user_data.lastEncoderFeedback;
     odrv16_user_data.received_feedback = false;
     odrv16.request(torqMsg, 1);
-    Serial.print(feedback.Vel_Estimate);
+    odrv16.request(vbusMsg, 1);
+    odrv16.request(iqMsg  , 1);
+    Serial.print(encoderFeedback.Vel_Estimate);
     Serial.print(",");
     Serial.print(millis());
     Serial.print(",");
+    Serial.print(torqMsg.Torque_Target);
+    Serial.print(",");
     Serial.print(torqMsg.Torque_Estimate);
+    Serial.print(",");
+    Serial.print(vbusMsg.Bus_Voltage);
+    Serial.print(",");
+    Serial.print(vbusMsg.Bus_Current);
+    Serial.print(",");
+    Serial.print(iqMsg.Iq_Setpoint);
+    Serial.print(",");
+    Serial.print(iqMsg.Iq_Measured);
     Serial.println(",16,");
   }
 
   if (odrv19_user_data.received_feedback) 
   {
-    Get_Encoder_Estimates_msg_t feedback = odrv19_user_data.last_feedback;
+    Get_Encoder_Estimates_msg_t encoderFeedback = odrv19_user_data.lastEncoderFeedback;
     odrv19_user_data.received_feedback = false;
     odrv19.request(torqMsg, 1);
-    Serial.print(feedback.Vel_Estimate);
+    odrv19.request(vbusMsg, 1);
+    odrv19.request(iqMsg  , 1);
+    Serial.print(encoderFeedback.Vel_Estimate);
     Serial.print(",");
     Serial.print(millis());
     Serial.print(",");
+    Serial.print(torqMsg.Torque_Target);
+    Serial.print(",");
     Serial.print(torqMsg.Torque_Estimate);
+    Serial.print(",");
+    Serial.print(vbusMsg.Bus_Voltage);
+    Serial.print(",");
+    Serial.print(vbusMsg.Bus_Current);
+    Serial.print(",");
+    Serial.print(iqMsg.Iq_Setpoint);
+    Serial.print(",");
+    Serial.print(iqMsg.Iq_Measured);
     Serial.println(",19,");
   }
   
